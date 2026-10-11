@@ -4,7 +4,6 @@
 #include "Time.h"
 
 #include <glfw3.h>
-
 #include <iostream>
 
 namespace VoxelForge
@@ -18,19 +17,23 @@ namespace VoxelForge
 
         std::cout << "Starting VoxelForge...\n";
 
-        if (!m_window.Create(
-            "VoxelForge",
-            1280,
-            720))
+        if (!m_window.Create("VoxelForge", 1280, 720))
         {
-            std::cerr << "Failed to initialize VoxelForge.\n";
+            std::cerr << "Failed to initialize VoxelForge window.\n";
+            return false;
+        }
+
+        // Initialise Vulkan after GLFW has created the window.
+        if (!m_vulkanContext.Initialize(m_window.GetNativeWindow()))
+        {
+            std::cerr << "Failed to initialize Vulkan.\n";
+            m_vulkanContext.Shutdown();
             return false;
         }
 
         Time::Reset();
 
         m_initialized = true;
-
         std::cout << "VoxelForge initialized.\n";
 
         return true;
@@ -48,31 +51,25 @@ namespace VoxelForge
 
         while (!m_window.ShouldClose())
         {
-            // Process keyboard, mouse and window events.
             m_window.PollEvents();
-
-            // Update frame timing.
             Time::Tick();
 
-            GLFWwindow* nativeWindow =
-                m_window.GetNativeWindow();
+            GLFWwindow* nativeWindow = m_window.GetNativeWindow();
 
-            // Escape requests a clean shutdown.
-            if (Input::IsKeyDown(
-                nativeWindow,
-                GLFW_KEY_ESCAPE))
+            if (Input::IsKeyDown(nativeWindow, GLFW_KEY_ESCAPE))
             {
                 m_window.RequestClose();
             }
 
-            // Game and engine updates will go here later in dev
-          
+            // Rendering and engine updates will be added later.
         }
 
         std::cout << "Leaving main loop.\n";
 
-        m_initialized = false;
+        // Destroy Vulkan resources before shutting down the window.
+        m_vulkanContext.Shutdown();
 
+        m_initialized = false;
         return 0;
     }
 }

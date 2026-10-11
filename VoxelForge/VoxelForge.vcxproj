@@ -89,12 +89,13 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)GLFW_DLL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)glfw3dll.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);vulkan-1.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependencies\GLFW\lib-vc2026;$(VULKAN_SDK)\Lib;</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>copy /Y "$(SolutionDir)Dependencies\GLFW\lib-vc2026\glfw3.dll" "$(OutDir)"</Command>
@@ -109,12 +110,13 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)GLFW_DLL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)glfw3dll.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);vulkan-1.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependencies\GLFW\lib-vc2026;$(VULKAN_SDK)\Lib;</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>copy /Y "$(SolutionDir)Dependencies\GLFW\lib-vc2026\glfw3.dll" "$(OutDir)"</Command>
@@ -127,13 +129,13 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)GLFW_DLL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)glfw3dll.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)Dependencies\GLFW\lib-vc2026</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);vulkan-1.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependencies\GLFW\lib-vc2026;$(VULKAN_SDK)\Lib;$(SolutionDir)Dependencies\GLFW\lib-vc2026</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>copy /Y "$(SolutionDir)Dependencies\GLFW\lib-vc2026\glfw3.dll" "$(OutDir)"</Command>
@@ -148,12 +150,13 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)GLFW_DLL</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VULKAN_SDK)\Include;$(SolutionDir)Dependencies\GLFW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)glfw3dll.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(CoreLibraryDependencies);vulkan-1.lib;glfw3dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependencies\GLFW\lib-vc2026;$(VULKAN_SDK)\Lib;</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
       <Command>copy /Y "$(SolutionDir)Dependencies\GLFW\lib-vc2026\glfw3.dll" "$(OutDir)"</Command>
@@ -164,6 +167,7 @@
     <ClCompile Include="Source\Engine\Core\Input.cpp" />
     <ClCompile Include="Source\Engine\Core\Time.cpp" />
     <ClCompile Include="Source\Engine\Core\Window.cpp" />
+    <ClCompile Include="Source\Engine\Core\Renderer\VulkanContext.cpp" />
     <ClCompile Include="Source\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -171,6 +175,7 @@
     <ClInclude Include="Source\Engine\Core\Input.h" />
     <ClInclude Include="Source\Engine\Core\Time.h" />
     <ClInclude Include="Source\Engine\Core\Window.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\VulkanContext.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
