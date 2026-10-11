@@ -1,0 +1,86 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+out/
+build/
+[Bb]uild/
+
+# Compiled files
+*.obj
+*.o
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.ipch
+*.exe
+*.dll
+*.lib
+*.exp
+*.tlog
+*.lastbuildstate
+*.log
+
+# Visual Studio generated files
+Generated Files/
+ipch/
+*.VC.db
+*.VC.VC.opendb
+
+# CMake (if added later)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Testing/
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.old
+*.swp
+*.swo
+*~
+
+# Crash dumps
+*.dmp
+*.stackdump
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Generated game data and saves
+Saves/
+Logs/
+CrashReports/
+
+# Generated shader binaries
+*.spv
+
+# IDE-specific settings
+.vscode/
+.idea/
