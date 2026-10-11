@@ -1,4 +1,4 @@
-\# VoxelForge
+# VoxelForge
 
 
 
@@ -10,75 +10,75 @@ The project uses Vulkan for graphics and GLFW for window creation and input. It 
 
 
 
-\## Features
+## Features
 
 
 
-\### Current
+### Current
 
-\- C++20 project setup
+- C++20 project setup
 
-\- GLFW window creation
+- GLFW window creation
 
-\- Keyboard and mouse input queries
+- Keyboard and mouse input queries
 
-\- Main application loop
+- Main application loop
 
-\- Frame timing with delta time
+- Frame timing with delta time
 
-\- Window event handling
+- Window event handling
 
-\- Clean application shutdown
+- Clean application shutdown
 
-\- Solution-root-relative dependency paths
-
-
-
-\### Planned
-
-\- Vulkan instance and device management
-
-\- Vulkan rendering pipeline
-
-\- 3D camera and shader systems
-
-\- Voxel block definitions
-
-\- Chunk storage and mesh generation
-
-\- Procedural terrain generation
-
-\- First-person player movement and collision
-
-\- Block mining and placement
-
-\- Inventory and crafting
-
-\- Chunk streaming and world saving
-
-\- Lighting, biomes and other world features
+- Solution-root-relative dependency paths
 
 
 
-\## Technology stack
+### Planned
+
+- Vulkan instance and device management
+
+- Vulkan rendering pipeline
+
+- 3D camera and shader systems
+
+- Voxel block definitions
+
+- Chunk storage and mesh generation
+
+- Procedural terrain generation
+
+- First-person player movement and collision
+
+- Block mining and placement
+
+- Inventory and crafting
+
+- Chunk streaming and world saving
+
+- Lighting, biomes and other world features
 
 
 
-\- \*\*Language:\*\* C++20
-
-\- \*\*IDE:\*\* Visual Studio
-
-\- \*\*Graphics API:\*\* Vulkan
-
-\- \*\*Window and input:\*\* GLFW
-
-\- \*\*Build system:\*\* Visual Studio solution and project files
-
-\- \*\*Platform:\*\* Windows x64
+## Technology stack
 
 
 
-\## Project structure
+- **Language:** C++20
+
+- **IDE:** Visual Studio
+
+- **Graphics API:** Vulkan
+
+- **Window and input:** GLFW
+
+- **Build system:** Visual Studio solution and project files
+
+- **Platform:** Windows x64
+
+
+
+## Project structure
 
 
 
@@ -130,39 +130,39 @@ VoxelForge/
 
 
 
-\## Requirements
+## Requirements
 
 
 
-\- Visual Studio with the Desktop development with C++ workload
+- Visual Studio with the Desktop development with C++ workload
 
-\- A compatible MSVC C++ compiler
+- A compatible MSVC C++ compiler
 
-\- Vulkan SDK
+- Vulkan SDK
 
-\- GLFW Windows libraries for Visual C++
+- GLFW Windows libraries for Visual C++
 
-\- A compatible graphics driver
-
-
-
-\## Setup
+- A compatible graphics driver
 
 
 
-1\. Clone or download the repository.
+## Setup
 
-2\. Install Visual Studio and the Vulkan SDK.
 
-3\. Place the GLFW headers and libraries under `Dependencies/GLFW/`.
 
-4\. Open `VoxelForge.sln` in Visual Studio.
+1. Clone or download the repository.
 
-5\. Select the `Debug` configuration and `x64` platform.
+2. Install Visual Studio and the Vulkan SDK.
 
-6\. Build the solution.
+3. Place the GLFW headers and libraries under `Dependencies/GLFW/`.
 
-7\. Run the `VoxelForge` project.
+4. Open `VoxelForge.sln` in Visual Studio.
+
+5. Select the `Debug` configuration and `x64` platform.
+
+6. Build the solution.
+
+7. Run the `VoxelForge` project.
 
 
 
@@ -174,19 +174,8 @@ Ensure the GLFW library and DLL filenames match those referenced in the project 
 
 
 
-\## Controls
 
-
-
-| Key | Action |
-
-|---|---|
-
-| Escape | Close the application |
-
-
-
-\## Development status
+## Development status
 
 
 
@@ -197,12 +186,6 @@ VoxelForge is in its early development stage. The current focus is the engine fo
 Vulkan rendering and gameplay systems have not yet been implemented.
 
 
-
-\## License
-
-
-
-The project license has not yet been defined. Add a license before distributing the project publicly.
 
 
 
