@@ -4,7 +4,7 @@
 #include <vulkan/vulkan.h>
 #include <cstdint>
 #include <vector>
-
+#include <glfw3.h>
 struct GLFWwindow;
 
 class VulkanContext
@@ -18,6 +18,8 @@ public:
 
     bool Initialize(GLFWwindow* window);
     void Shutdown();
+    void RenderFrame();
+    void RecreateSwapchain(GLFWwindow* window);
 
     VkInstance GetInstance() const { return instance; }
     VkSurfaceKHR GetSurface() const { return surface; }
@@ -25,6 +27,21 @@ public:
     VkDevice GetDevice() const { return device; }
     VkQueue GetGraphicsQueue() const { return graphicsQueue; }
     VkSwapchainKHR GetSwapchain() const { return swapchain; }
+
+    VkSemaphore GetImageAvailableSemaphore() const
+    {
+        return imageAvailableSemaphores[currentFrame];
+    }
+
+    VkSemaphore GetRenderFinishedSemaphore() const
+    {
+        return renderFinishedSemaphores[currentFrame];
+    }
+
+    VkFence GetInFlightFence() const
+    {
+        return inFlightFences[currentFrame];
+    }
 
     uint32_t GetGraphicsQueueFamilyIndex() const
     {
@@ -57,6 +74,16 @@ public:
     {
         return commandBuffers;
     }
+    VkRenderPass GetRenderPass() const
+    {
+        return renderPass;
+    }
+
+    const std::vector<VkFramebuffer>& GetFramebuffers() const
+    {
+        return framebuffers;
+    }
+
 private:
     bool CreateInstance();
     bool CreateSurface(GLFWwindow* window);
@@ -66,6 +93,19 @@ private:
     bool CreateImageViews();
     bool CreateCommandPool();
     bool CreateCommandBuffers();
+    bool CreateRenderPass();
+    bool CreateFramebuffers();
+    bool CreateSyncObjects();
+    void DrawFrame();
+
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+    uint32_t currentFrame = 0;
+
+    VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT]{};
+    VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT]{};
+    VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT]{};
+
+    GLFWwindow* windowHandle = nullptr;
 
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -76,6 +116,8 @@ private:
 
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
+    VkRenderPass renderPass = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> framebuffers;
 
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     std::vector<VkImage> swapchainImages;

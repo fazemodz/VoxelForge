@@ -62,6 +62,7 @@ namespace VoxelForge
             }
 
             // Rendering and engine updates will be added later.
+            m_vulkanContext.RenderFrame();
         }
 
         std::cout << "Leaving main loop.\n";

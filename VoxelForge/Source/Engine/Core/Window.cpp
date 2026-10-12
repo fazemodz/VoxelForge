@@ -1,3 +1,4 @@
+
 #include "Window.h"
 
 #include <glfw3.h>
@@ -6,35 +7,28 @@
 
 namespace VoxelForge
 {
-    namespace
+    Window::~Window()
     {
-        void GLFWErrorCallback(int error, const char* description)
+        if (m_window != nullptr)
         {
-            std::cerr
-                << "[GLFW] Error " << error
-                << ": " << description
-                << '\n';
+            glfwDestroyWindow(m_window);
+            m_window = nullptr;
+        }
+
+        if (m_glfwInitialized)
+        {
+            glfwTerminate();
+            m_glfwInitialized = false;
         }
     }
 
-    bool Window::Create(
-        const char* title,
-        int width,
-        int height)
+    bool Window::Create(const char* title, int width, int height)
     {
-        if (m_window != nullptr || m_glfwInitialized)
+        if (m_window != nullptr)
         {
-            std::cerr << "[Window] Window already initialized.\n";
+            std::cerr << "[Window] Window already exists.\n";
             return false;
         }
-
-        if (width <= 0 || height <= 0)
-        {
-            std::cerr << "[Window] Invalid window dimensions.\n";
-            return false;
-        }
-
-        glfwSetErrorCallback(GLFWErrorCallback);
 
         if (glfwInit() != GLFW_TRUE)
         {
@@ -44,10 +38,7 @@ namespace VoxelForge
 
         m_glfwInitialized = true;
 
-        // Do not create an OpenGL or OpenGL ES context.
-        // Vulkan will provide the graphics API.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
         m_window = glfwCreateWindow(
@@ -61,12 +52,19 @@ namespace VoxelForge
         if (m_window == nullptr)
         {
             std::cerr << "[Window] Failed to create window.\n";
-
             glfwTerminate();
             m_glfwInitialized = false;
-
             return false;
         }
+
+        glfwSetWindowUserPointer(m_window, this);
+
+        glfwSetFramebufferSizeCallback(
+            m_window,
+            FramebufferResizeCallback
+        );
+
+        m_framebufferResized = false;
 
         std::cout << "[Window] Created successfully.\n";
 
@@ -75,10 +73,7 @@ namespace VoxelForge
 
     void Window::PollEvents() const
     {
-        if (m_window != nullptr)
-        {
-            glfwPollEvents();
-        }
+        glfwPollEvents();
     }
 
     void Window::RequestClose() const
@@ -91,8 +86,12 @@ namespace VoxelForge
 
     bool Window::ShouldClose() const
     {
-        return m_window == nullptr ||
-            glfwWindowShouldClose(m_window) == GLFW_TRUE;
+        if (m_window == nullptr)
+        {
+            return true;
+        }
+
+        return glfwWindowShouldClose(m_window) == GLFW_TRUE;
     }
 
     GLFWwindow* Window::GetNativeWindow() const
@@ -100,22 +99,21 @@ namespace VoxelForge
         return m_window;
     }
 
-    Window::~Window()
+    void Window::FramebufferResizeCallback(
+        GLFWwindow* window,
+        int width,
+        int height)
     {
-        if (m_window != nullptr)
+        (void)width;
+        (void)height;
+
+        auto* appWindow = static_cast<Window*>(
+            glfwGetWindowUserPointer(window)
+            );
+
+        if (appWindow != nullptr)
         {
-            glfwDestroyWindow(m_window);
-            m_window = nullptr;
-
-            std::cout << "[Window] Destroyed.\n";
-        }
-
-        if (m_glfwInitialized)
-        {
-            glfwTerminate();
-            m_glfwInitialized = false;
-
-            std::cout << "[Window] GLFW terminated.\n";
+            appWindow->m_framebufferResized = true;
         }
     }
 }

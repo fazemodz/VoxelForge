@@ -29,6 +29,8 @@ bool VulkanContext::Initialize(GLFWwindow* window)
         return false;
     }
 
+    windowHandle = window;
+
     std::cout << "[Vulkan] Initializing Vulkan...\n";
 
     if (!CreateInstance() ||
@@ -38,7 +40,10 @@ bool VulkanContext::Initialize(GLFWwindow* window)
         !CreateSwapchain(window) ||
         !CreateImageViews() ||
         !CreateCommandPool() ||
-        !CreateCommandBuffers())
+        !CreateCommandBuffers() ||
+        !CreateRenderPass() ||
+        !CreateFramebuffers() ||
+        !CreateSyncObjects())
     {
         Shutdown();
         return false;
@@ -733,8 +738,458 @@ bool VulkanContext::CreateCommandPool()
     std::cout << "[Vulkan] Command pool created successfully.\n";
     return true;
 }
+bool VulkanContext::CreateRenderPass()
+{
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = swapchainImageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentReference{};
+    colorAttachmentReference.attachment = 0;
+    colorAttachmentReference.layout =
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentReference;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    createInfo.attachmentCount = 1;
+    createInfo.pAttachments = &colorAttachment;
+    createInfo.subpassCount = 1;
+    createInfo.pSubpasses = &subpass;
+    createInfo.dependencyCount = 1;
+    createInfo.pDependencies = &dependency;
+
+    VkResult result = vkCreateRenderPass(
+        device,
+        &createInfo,
+        nullptr,
+        &renderPass
+    );
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create render pass. Error: "
+            << result << '\n';
+        return false;
+    }
+
+    std::cout << "[Vulkan] Render pass created successfully.\n";
+    return true;
+}
+bool VulkanContext::CreateFramebuffers()
+{
+    if (renderPass == VK_NULL_HANDLE || swapchainImageViews.empty())
+    {
+        std::cerr << "[Vulkan] Cannot create framebuffers: "
+            "render pass or image views are missing.\n";
+        return false;
+    }
+
+    framebuffers.resize(swapchainImageViews.size());
+
+    for (size_t i = 0; i < swapchainImageViews.size(); ++i)
+    {
+        VkImageView attachments[] = {
+            swapchainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        createInfo.renderPass = renderPass;
+        createInfo.attachmentCount = 1;
+        createInfo.pAttachments = attachments;
+        createInfo.width = swapchainExtent.width;
+        createInfo.height = swapchainExtent.height;
+        createInfo.layers = 1;
+
+        VkResult result = vkCreateFramebuffer(
+            device,
+            &createInfo,
+            nullptr,
+            &framebuffers[i]
+        );
+
+        if (result != VK_SUCCESS)
+        {
+            std::cerr << "[Vulkan] Failed to create framebuffer "
+                << i << ". Error: " << result << '\n';
+
+            for (VkFramebuffer framebuffer : framebuffers)
+            {
+                if (framebuffer != VK_NULL_HANDLE)
+                {
+                    vkDestroyFramebuffer(
+                        device, framebuffer, nullptr
+                    );
+                }
+            }
+
+            framebuffers.clear();
+            return false;
+        }
+    }
+
+    std::cout << "[Vulkan] Created "
+        << framebuffers.size()
+        << " framebuffers.\n";
+
+    return true;
+}
+bool VulkanContext::CreateSyncObjects()
+{
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        if (vkCreateSemaphore(
+            device, &semaphoreInfo, nullptr,
+            &imageAvailableSemaphores[i]) != VK_SUCCESS)
+        {
+            std::cerr << "[Vulkan] Failed to create image-available semaphore.\n";
+            return false;
+        }
+
+        if (vkCreateSemaphore(
+            device, &semaphoreInfo, nullptr,
+            &renderFinishedSemaphores[i]) != VK_SUCCESS)
+        {
+            std::cerr << "[Vulkan] Failed to create render-finished semaphore.\n";
+            return false;
+        }
+
+        if (vkCreateFence(
+            device, &fenceInfo, nullptr,
+            &inFlightFences[i]) != VK_SUCCESS)
+        {
+            std::cerr << "[Vulkan] Failed to create in-flight fence.\n";
+            return false;
+        }
+    }
+
+    std::cout << "[Vulkan] Frame synchronisation created successfully.\n";
+    return true;
+}
+void VulkanContext::DrawFrame()
+{
+    if (windowHandle == nullptr)
+        return;
+
+    // A minimized window has no drawable framebuffer. Wait for events rather
+    // than trying to create a zero-sized swapchain.
+    int framebufferWidth = 0;
+    int framebufferHeight = 0;
+    glfwGetFramebufferSize(windowHandle, &framebufferWidth, &framebufferHeight);
+
+    if (framebufferWidth <= 0 || framebufferHeight <= 0)
+        return;
+
+    VkFence inFlightFence = inFlightFences[currentFrame];
+
+    if (vkWaitForFences(
+        device, 1, &inFlightFence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed waiting for frame fence.\n";
+        return;
+    }
+
+    uint32_t imageIndex = 0;
+
+    VkResult result = vkAcquireNextImageKHR(
+        device,
+        swapchain,
+        UINT64_MAX,
+        imageAvailableSemaphores[currentFrame],
+        VK_NULL_HANDLE,
+        &imageIndex
+    );
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        RecreateSwapchain(windowHandle);
+        return;
+    }
+
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        std::cerr << "[Vulkan] Failed to acquire swapchain image. Error: "
+            << result << '\n';
+        return;
+    }
+
+    const bool acquireSuboptimal = (result == VK_SUBOPTIMAL_KHR);
+
+    if (imageIndex >= commandBuffers.size() ||
+        imageIndex >= framebuffers.size())
+    {
+        std::cerr << "[Vulkan] Acquired image index is out of range.\n";
+        return;
+    }
+
+    VkCommandBuffer commandBuffer = commandBuffers[imageIndex];
+
+    if (vkResetCommandBuffer(commandBuffer, 0) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to reset command buffer.\n";
+        return;
+    }
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to begin command buffer.\n";
+        return;
+    }
+
+    VkClearValue clearValue{};
+    clearValue.color = { { 0.08f, 0.12f, 0.20f, 1.0f } };
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = framebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = swapchainExtent;
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearValue;
+
+    vkCmdBeginRenderPass(
+        commandBuffer,
+        &renderPassInfo,
+        VK_SUBPASS_CONTENTS_INLINE
+    );
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to record command buffer.\n";
+        return;
+    }
+
+    VkSemaphore waitSemaphores[] = {
+        imageAvailableSemaphores[currentFrame]
+    };
+
+    VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    };
+
+    VkSemaphore signalSemaphores[] = {
+        renderFinishedSemaphores[currentFrame]
+    };
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    // Reset the fence only when we are ready to submit work that will signal it.
+    if (vkResetFences(device, 1, &inFlightFence) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to reset frame fence.\n";
+        return;
+    }
+
+    if (vkQueueSubmit(
+        graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to submit draw command.\n";
+        return;
+    }
+
+    VkSwapchainKHR swapchains[] = { swapchain };
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &imageIndex;
+
+    result = vkQueuePresentKHR(graphicsQueue, &presentInfo);
+
+    const bool needsRecreation =
+        acquireSuboptimal ||
+        result == VK_ERROR_OUT_OF_DATE_KHR ||
+        result == VK_SUBOPTIMAL_KHR;
+
+    if (result != VK_SUCCESS &&
+        result != VK_ERROR_OUT_OF_DATE_KHR &&
+        result != VK_SUBOPTIMAL_KHR)
+    {
+        std::cerr << "[Vulkan] Failed to present frame. Error: "
+            << result << '\n';
+        return;
+    }
+
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+    if (needsRecreation)
+        RecreateSwapchain(windowHandle);
+}
+
+void VulkanContext::RenderFrame()
+{
+    if (device == VK_NULL_HANDLE ||
+        swapchain == VK_NULL_HANDLE ||
+        commandBuffers.empty() ||
+        windowHandle == nullptr)
+    {
+        return;
+    }
+
+    int framebufferWidth = 0;
+    int framebufferHeight = 0;
+    glfwGetFramebufferSize(windowHandle, &framebufferWidth, &framebufferHeight);
+
+    // Skip rendering while minimized. The next call will try again after restore.
+    if (framebufferWidth <= 0 || framebufferHeight <= 0)
+        return;
+
+    if (static_cast<uint32_t>(framebufferWidth) != swapchainExtent.width ||
+        static_cast<uint32_t>(framebufferHeight) != swapchainExtent.height)
+    {
+        RecreateSwapchain(windowHandle);
+        return;
+    }
+
+    DrawFrame();
+}
+
+void VulkanContext::RecreateSwapchain(GLFWwindow* window)
+{
+    if (device == VK_NULL_HANDLE || window == nullptr)
+        return;
+
+    int width = 0;
+    int height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+
+    // When minimized, wait until the window has a non-zero framebuffer.
+    while ((width <= 0 || height <= 0) &&
+        glfwWindowShouldClose(window) == GLFW_FALSE)
+    {
+        glfwWaitEvents();
+        glfwGetFramebufferSize(window, &width, &height);
+    }
+
+    if (width <= 0 || height <= 0)
+        return;
+
+    if (vkDeviceWaitIdle(device) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to wait for device before swapchain recreation.\n";
+        return;
+    }
+
+    std::cout << "[Vulkan] Recreating swapchain...\n";
+
+    // Destroy objects that depend on the old swapchain, in dependency order.
+    for (VkFramebuffer framebuffer : framebuffers)
+    {
+        if (framebuffer != VK_NULL_HANDLE)
+            vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+    framebuffers.clear();
+
+    if (renderPass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(device, renderPass, nullptr);
+        renderPass = VK_NULL_HANDLE;
+    }
+
+    if (!commandBuffers.empty() && commandPool != VK_NULL_HANDLE)
+    {
+        vkFreeCommandBuffers(
+            device,
+            commandPool,
+            static_cast<uint32_t>(commandBuffers.size()),
+            commandBuffers.data()
+        );
+        commandBuffers.clear();
+    }
+
+    for (VkImageView imageView : swapchainImageViews)
+    {
+        if (imageView != VK_NULL_HANDLE)
+            vkDestroyImageView(device, imageView, nullptr);
+    }
+    swapchainImageViews.clear();
+
+    if (swapchain != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(device, swapchain, nullptr);
+        swapchain = VK_NULL_HANDLE;
+    }
+
+    swapchainImages.clear();
+    swapchainImageFormat = VK_FORMAT_UNDEFINED;
+    swapchainExtent = {};
+
+    if (!CreateSwapchain(window) ||
+        !CreateImageViews() ||
+        !CreateCommandBuffers() ||
+        !CreateRenderPass() ||
+        !CreateFramebuffers())
+    {
+        std::cerr << "[Vulkan] Swapchain recreation failed.\n";
+        return;
+    }
+
+    std::cout << "[Vulkan] Swapchain recreation complete.\n";
+}
+
 void VulkanContext::Shutdown()
 {
+    if (device != VK_NULL_HANDLE)
+        vkDeviceWaitIdle(device);
+
+    for (VkFramebuffer framebuffer : framebuffers)
+    {
+        if (framebuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyFramebuffer(device, framebuffer, nullptr);
+        }
+    }
+
+    framebuffers.clear();
+
+    if (renderPass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(device, renderPass, nullptr);
+        renderPass = VK_NULL_HANDLE;
+    }
+
     if (device != VK_NULL_HANDLE)
     {
         for (VkImageView imageView : swapchainImageViews)
@@ -747,8 +1202,32 @@ void VulkanContext::Shutdown()
 
         swapchainImageViews.clear();
         vkDeviceWaitIdle(device);
-        commandBuffers.clear(); commandBuffers.clear();
+        commandBuffers.clear();
 
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            if (imageAvailableSemaphores[i] != VK_NULL_HANDLE)
+            {
+                vkDestroySemaphore(
+                    device, imageAvailableSemaphores[i], nullptr);
+                imageAvailableSemaphores[i] = VK_NULL_HANDLE;
+            }
+
+            if (renderFinishedSemaphores[i] != VK_NULL_HANDLE)
+            {
+                vkDestroySemaphore(
+                    device, renderFinishedSemaphores[i], nullptr);
+                renderFinishedSemaphores[i] = VK_NULL_HANDLE;
+            }
+
+            if (inFlightFences[i] != VK_NULL_HANDLE)
+            {
+                vkDestroyFence(device, inFlightFences[i], nullptr);
+                inFlightFences[i] = VK_NULL_HANDLE;
+            }
+        }
+
+        currentFrame = 0;
         if (commandPool != VK_NULL_HANDLE)
         {
             vkDestroyCommandPool(device, commandPool, nullptr);
@@ -785,4 +1264,5 @@ void VulkanContext::Shutdown()
 
     physicalDevice = VK_NULL_HANDLE;
     graphicsQueueFamilyIndex = UINT32_MAX;
+    windowHandle = nullptr;
 }

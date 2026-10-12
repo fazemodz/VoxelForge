@@ -4,4 +4,5 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="VoxelForge/VoxelForge.vcxproj" Id="b40f4edd-0978-4b69-8902-6b5120c754f7" />
+  <Project Path="VoxelForgeSandbox/VoxelForgeSandbox.vcxproj" Id="4cec5b3a-5fe6-48db-a3ff-3445ff85b9b2" />
 </Solution>
