@@ -85,6 +85,12 @@ public:
     }
 
 private:
+    struct Vertex
+    {
+        float position[2];
+        float color[3];
+    };
+
     bool CreateInstance();
     bool CreateSurface(GLFWwindow* window);
     bool SelectPhysicalDevice();
@@ -93,7 +99,19 @@ private:
     bool CreateImageViews();
     bool CreateCommandPool();
     bool CreateCommandBuffers();
+    bool CreateVertexBuffer();
+    bool CreateIndexBuffer();
+    bool CreateBuffer(
+        VkDeviceSize size,
+        VkBufferUsageFlags usage,
+        VkMemoryPropertyFlags properties,
+        VkBuffer& buffer,
+        VkDeviceMemory& bufferMemory);
+    uint32_t FindMemoryType(
+        uint32_t typeFilter,
+        VkMemoryPropertyFlags properties) const;
     bool CreateRenderPass();
+    bool CreateGraphicsPipeline();
     bool CreateFramebuffers();
     bool CreateSyncObjects();
     void DrawFrame();
@@ -110,6 +128,10 @@ private:
     VkInstance instance = VK_NULL_HANDLE;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkCommandPool commandPool = VK_NULL_HANDLE;
+    VkBuffer vertexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+    VkBuffer indexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
@@ -117,6 +139,8 @@ private:
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
     VkRenderPass renderPass = VK_NULL_HANDLE;
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VkPipeline graphicsPipeline = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> framebuffers;
 
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;

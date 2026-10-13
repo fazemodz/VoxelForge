@@ -5,9 +5,48 @@
 #include "VulkanContext.h"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstring>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
+
+namespace
+{
+    bool ReadShaderFile(const char* path, std::vector<char>& code)
+    {
+        std::ifstream file(path, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open())
+        {
+            std::cerr << "[Vulkan] Failed to open shader file: " << path << '\n';
+            return false;
+        }
+
+        const std::streamsize fileSize = file.tellg();
+        if (fileSize <= 0 || fileSize % 4 != 0)
+        {
+            std::cerr << "[Vulkan] Shader file has an invalid size: " << path << '\n';
+            return false;
+        }
+
+        code.resize(static_cast<size_t>(fileSize));
+        file.seekg(0);
+        file.read(code.data(), fileSize);
+
+        if (!file)
+        {
+            std::cerr << "[Vulkan] Failed to read shader file: " << path << '\n';
+            code.clear();
+            return false;
+        }
+
+        return true;
+    }
+}
 
 VulkanContext::~VulkanContext()
 {
@@ -37,11 +76,14 @@ bool VulkanContext::Initialize(GLFWwindow* window)
         !CreateSurface(window) ||
         !SelectPhysicalDevice() ||
         !CreateLogicalDevice() ||
+        !CreateVertexBuffer() ||
+        !CreateIndexBuffer() ||
         !CreateSwapchain(window) ||
         !CreateImageViews() ||
         !CreateCommandPool() ||
         !CreateCommandBuffers() ||
         !CreateRenderPass() ||
+        !CreateGraphicsPipeline() ||
         !CreateFramebuffers() ||
         !CreateSyncObjects())
     {
@@ -714,6 +756,166 @@ bool VulkanContext::CreateCommandBuffers()
     return true;
 }
 
+uint32_t VulkanContext::FindMemoryType(
+    uint32_t typeFilter,
+    VkMemoryPropertyFlags properties) const
+{
+    VkPhysicalDeviceMemoryProperties memoryProperties{};
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+    {
+        const bool typeMatches = (typeFilter & (1u << i)) != 0;
+        const bool propertiesMatch =
+            (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+
+        if (typeMatches && propertiesMatch)
+            return i;
+    }
+
+    return UINT32_MAX;
+}
+
+bool VulkanContext::CreateBuffer(
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties,
+    VkBuffer& buffer,
+    VkDeviceMemory& bufferMemory)
+{
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create GPU buffer. Error: "
+            << result << '\n';
+        buffer = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryRequirements memoryRequirements{};
+    vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
+
+    const uint32_t memoryType = FindMemoryType(
+        memoryRequirements.memoryTypeBits, properties);
+
+    if (memoryType == UINT32_MAX)
+    {
+        std::cerr << "[Vulkan] No compatible memory type found for buffer.\n";
+        vkDestroyBuffer(device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryAllocateInfo allocationInfo{};
+    allocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocationInfo.allocationSize = memoryRequirements.size;
+    allocationInfo.memoryTypeIndex = memoryType;
+
+    result = vkAllocateMemory(device, &allocationInfo, nullptr, &bufferMemory);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to allocate buffer memory. Error: "
+            << result << '\n';
+        vkDestroyBuffer(device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+        bufferMemory = VK_NULL_HANDLE;
+        return false;
+    }
+
+    result = vkBindBufferMemory(device, buffer, bufferMemory, 0);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to bind buffer memory. Error: "
+            << result << '\n';
+        vkFreeMemory(device, bufferMemory, nullptr);
+        vkDestroyBuffer(device, buffer, nullptr);
+        bufferMemory = VK_NULL_HANDLE;
+        buffer = VK_NULL_HANDLE;
+        return false;
+    }
+
+    return true;
+}
+
+bool VulkanContext::CreateVertexBuffer()
+{
+    // This triangle now uses real vertex data instead of gl_VertexIndex.
+    const std::array<Vertex, 3> vertices = {{
+        {{ 0.0f, -0.65f }, { 1.0f, 0.25f, 0.20f }},
+        {{ 0.65f, 0.55f }, { 0.20f, 0.90f, 0.35f }},
+        {{ -0.65f, 0.55f }, { 0.20f, 0.45f, 1.0f }}
+    }};
+
+    const VkDeviceSize bufferSize = sizeof(vertices);
+    if (!CreateBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        vertexBuffer,
+        vertexBufferMemory))
+    {
+        return false;
+    }
+
+    void* mappedMemory = nullptr;
+    VkResult result = vkMapMemory(
+        device, vertexBufferMemory, 0, bufferSize, 0, &mappedMemory);
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to map vertex buffer memory. Error: "
+            << result << '\n';
+        return false;
+    }
+
+    std::memcpy(mappedMemory, vertices.data(), sizeof(vertices));
+    vkUnmapMemory(device, vertexBufferMemory);
+
+    std::cout << "[Vulkan] Vertex buffer created (3 vertices).\n";
+    return true;
+}
+
+bool VulkanContext::CreateIndexBuffer()
+{
+    const std::array<uint32_t, 3> indices = { 0, 1, 2 };
+    const VkDeviceSize bufferSize = sizeof(indices);
+
+    if (!CreateBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        indexBuffer,
+        indexBufferMemory))
+    {
+        return false;
+    }
+
+    void* mappedMemory = nullptr;
+    VkResult result = vkMapMemory(
+        device, indexBufferMemory, 0, bufferSize, 0, &mappedMemory);
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to map index buffer memory. Error: "
+            << result << '\n';
+        return false;
+    }
+
+    std::memcpy(mappedMemory, indices.data(), sizeof(indices));
+    vkUnmapMemory(device, indexBufferMemory);
+
+    std::cout << "[Vulkan] Index buffer created (3 indices).\n";
+    return true;
+}
+
 bool VulkanContext::CreateCommandPool()
 {
     VkCommandPoolCreateInfo createInfo{};
@@ -793,6 +995,198 @@ bool VulkanContext::CreateRenderPass()
     std::cout << "[Vulkan] Render pass created successfully.\n";
     return true;
 }
+bool VulkanContext::CreateGraphicsPipeline()
+{
+    std::vector<char> vertexShaderCode;
+    std::vector<char> fragmentShaderCode;
+
+    if (!ReadShaderFile("Shaders/triangle.vert.spv", vertexShaderCode) ||
+        !ReadShaderFile("Shaders/triangle.frag.spv", fragmentShaderCode))
+    {
+        std::cerr
+            << "[Vulkan] Could not load triangle shaders. Check that the "
+            << "compiled SPIR-V files are in the Shaders folder relative "
+            << "to the application's working directory.\n";
+        return false;
+    }
+
+    VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
+    VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
+
+    VkShaderModuleCreateInfo shaderCreateInfo{};
+    shaderCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shaderCreateInfo.codeSize = vertexShaderCode.size();
+    shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(vertexShaderCode.data());
+
+    VkResult result = vkCreateShaderModule(
+        device, &shaderCreateInfo, nullptr, &vertexShaderModule);
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create vertex shader module. Error: "
+            << result << '\n';
+        return false;
+    }
+
+    shaderCreateInfo.codeSize = fragmentShaderCode.size();
+    shaderCreateInfo.pCode = reinterpret_cast<const uint32_t*>(fragmentShaderCode.data());
+
+    result = vkCreateShaderModule(
+        device, &shaderCreateInfo, nullptr, &fragmentShaderModule);
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create fragment shader module. Error: "
+            << result << '\n';
+        vkDestroyShaderModule(device, vertexShaderModule, nullptr);
+        return false;
+    }
+
+    VkPipelineShaderStageCreateInfo vertexStage{};
+    vertexStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexStage.module = vertexShaderModule;
+    vertexStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragmentStage{};
+    fragmentStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentStage.module = fragmentShaderModule;
+    fragmentStage.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        vertexStage,
+        fragmentStage
+    };
+
+    VkVertexInputBindingDescription vertexBinding{};
+    vertexBinding.binding = 0;
+    vertexBinding.stride = sizeof(Vertex);
+    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 2> vertexAttributes{};
+    vertexAttributes[0].binding = 0;
+    vertexAttributes[0].location = 0;
+    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributes[0].offset = offsetof(Vertex, position);
+
+    vertexAttributes[1].binding = 0;
+    vertexAttributes[1].location = 1;
+    vertexAttributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    vertexAttributes[1].offset = offsetof(Vertex, color);
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{};
+    vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &vertexBinding;
+    vertexInput.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(vertexAttributes.size());
+    vertexInput.pVertexAttributeDescriptions = vertexAttributes.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swapchainExtent.width);
+    viewport.height = static_cast<float>(swapchainExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = swapchainExtent;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+    result = vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout);
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create pipeline layout. Error: "
+            << result << '\n';
+        vkDestroyShaderModule(device, fragmentShaderModule, nullptr);
+        vkDestroyShaderModule(device, vertexShaderModule, nullptr);
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.subpass = 0;
+
+    result = vkCreateGraphicsPipelines(
+        device,
+        VK_NULL_HANDLE,
+        1,
+        &pipelineInfo,
+        nullptr,
+        &graphicsPipeline);
+
+    vkDestroyShaderModule(device, fragmentShaderModule, nullptr);
+    vkDestroyShaderModule(device, vertexShaderModule, nullptr);
+
+    if (result != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create graphics pipeline. Error: "
+            << result << '\n';
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        pipelineLayout = VK_NULL_HANDLE;
+        return false;
+    }
+
+    std::cout << "[Vulkan] Graphics pipeline created successfully.\n";
+    return true;
+}
+
 bool VulkanContext::CreateFramebuffers()
 {
     if (renderPass == VK_NULL_HANDLE || swapchainImageViews.empty())
@@ -965,7 +1359,7 @@ void VulkanContext::DrawFrame()
     }
 
     VkClearValue clearValue{};
-    clearValue.color = { { 0.08f, 0.12f, 0.20f, 1.0f } };
+    clearValue.color = {{ 0.08f, 0.12f, 0.20f, 1.0f }};
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -981,6 +1375,18 @@ void VulkanContext::DrawFrame()
         &renderPassInfo,
         VK_SUBPASS_CONTENTS_INLINE
     );
+
+    vkCmdBindPipeline(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        graphicsPipeline
+    );
+    const VkDeviceSize vertexOffset = 0;
+    vkCmdBindVertexBuffers(
+        commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
+    vkCmdBindIndexBuffer(
+        commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -1122,6 +1528,18 @@ void VulkanContext::RecreateSwapchain(GLFWwindow* window)
     }
     framebuffers.clear();
 
+    if (graphicsPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
+        graphicsPipeline = VK_NULL_HANDLE;
+    }
+
+    if (pipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        pipelineLayout = VK_NULL_HANDLE;
+    }
+
     if (renderPass != VK_NULL_HANDLE)
     {
         vkDestroyRenderPass(device, renderPass, nullptr);
@@ -1160,6 +1578,7 @@ void VulkanContext::RecreateSwapchain(GLFWwindow* window)
         !CreateImageViews() ||
         !CreateCommandBuffers() ||
         !CreateRenderPass() ||
+        !CreateGraphicsPipeline() ||
         !CreateFramebuffers())
     {
         std::cerr << "[Vulkan] Swapchain recreation failed.\n";
@@ -1183,6 +1602,18 @@ void VulkanContext::Shutdown()
     }
 
     framebuffers.clear();
+
+    if (device != VK_NULL_HANDLE && graphicsPipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
+        graphicsPipeline = VK_NULL_HANDLE;
+    }
+
+    if (device != VK_NULL_HANDLE && pipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        pipelineLayout = VK_NULL_HANDLE;
+    }
 
     if (renderPass != VK_NULL_HANDLE)
     {
@@ -1243,6 +1674,27 @@ void VulkanContext::Shutdown()
         swapchainImages.clear();
         swapchainImageFormat = VK_FORMAT_UNDEFINED;
         swapchainExtent = {};
+
+        if (indexBuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device, indexBuffer, nullptr);
+            indexBuffer = VK_NULL_HANDLE;
+        }
+        if (indexBufferMemory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device, indexBufferMemory, nullptr);
+            indexBufferMemory = VK_NULL_HANDLE;
+        }
+        if (vertexBuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device, vertexBuffer, nullptr);
+            vertexBuffer = VK_NULL_HANDLE;
+        }
+        if (vertexBufferMemory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device, vertexBufferMemory, nullptr);
+            vertexBufferMemory = VK_NULL_HANDLE;
+        }
 
         vkDestroyDevice(device, nullptr);
         device = VK_NULL_HANDLE;
