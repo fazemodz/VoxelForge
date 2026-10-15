@@ -5,6 +5,10 @@
 #include <cstdint>
 #include <vector>
 #include <glfw3.h>
+
+#include "Camera.h"
+#include "Mesh.h"
+
 struct GLFWwindow;
 
 class VulkanContext
@@ -18,8 +22,36 @@ public:
 
     bool Initialize(GLFWwindow* window);
     void Shutdown();
-    void RenderFrame();
     void RecreateSwapchain(GLFWwindow* window);
+
+    // Queues a mesh to be drawn with the given model transform in the next
+    // RenderFrame. The mesh must stay alive until RenderFrame returns.
+    void Submit(const VoxelForge::Mesh& mesh, const glm::mat4& model);
+
+    // Draws everything submitted since the last call, then clears the queue.
+    void RenderFrame(const VoxelForge::Camera& camera);
+
+    // Blocks until the GPU has finished all submitted frames. Call before
+    // destroying meshes or other resources that recent frames may still use.
+    void WaitIdle() const
+    {
+        if (device != VK_NULL_HANDLE)
+            vkDeviceWaitIdle(device);
+    }
+
+    // Pass this to Mesh::Create to upload geometry to the GPU.
+    VoxelForge::VulkanUploadContext GetUploadContext() const
+    {
+        return { device, physicalDevice, commandPool, graphicsQueue };
+    }
+
+    float GetAspectRatio() const
+    {
+        return swapchainExtent.height == 0
+            ? 1.0f
+            : static_cast<float>(swapchainExtent.width) /
+              static_cast<float>(swapchainExtent.height);
+    }
 
     VkInstance GetInstance() const { return instance; }
     VkSurfaceKHR GetSurface() const { return surface; }
@@ -31,11 +63,6 @@ public:
     VkSemaphore GetImageAvailableSemaphore() const
     {
         return imageAvailableSemaphores[currentFrame];
-    }
-
-    VkSemaphore GetRenderFinishedSemaphore() const
-    {
-        return renderFinishedSemaphores[currentFrame];
     }
 
     VkFence GetInFlightFence() const
@@ -85,53 +112,58 @@ public:
     }
 
 private:
-    struct Vertex
-    {
-        float position[2];
-        float color[3];
-    };
-
     bool CreateInstance();
+    bool CreateDebugMessenger();
     bool CreateSurface(GLFWwindow* window);
     bool SelectPhysicalDevice();
     bool CreateLogicalDevice();
     bool CreateSwapchain(GLFWwindow* window);
     bool CreateImageViews();
+    bool CreateDepthResources();
+    VkFormat FindDepthFormat() const;
+    void DestroyDepthResources();
     bool CreateCommandPool();
     bool CreateCommandBuffers();
-    bool CreateVertexBuffer();
-    bool CreateIndexBuffer();
-    bool CreateBuffer(
-        VkDeviceSize size,
-        VkBufferUsageFlags usage,
-        VkMemoryPropertyFlags properties,
-        VkBuffer& buffer,
-        VkDeviceMemory& bufferMemory);
-    uint32_t FindMemoryType(
-        uint32_t typeFilter,
-        VkMemoryPropertyFlags properties) const;
     bool CreateRenderPass();
     bool CreateGraphicsPipeline();
     bool CreateFramebuffers();
     bool CreateSyncObjects();
-    void DrawFrame();
+    bool CreateSwapchainSemaphores();
+    void DestroySwapchainSemaphores();
+    void DestroySwapchainResources();
+    void DrawFrame(const VoxelForge::Camera& camera);
+
+    struct DrawCommand
+    {
+        const VoxelForge::Mesh* mesh = nullptr;
+        glm::mat4 model{ 1.0f };
+    };
+
+    std::vector<DrawCommand> drawQueue;
 
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
     uint32_t currentFrame = 0;
 
+    // Per frame in flight: the CPU records frame N+1 while the GPU draws frame N.
     VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT]{};
-    VkSemaphore renderFinishedSemaphores[MAX_FRAMES_IN_FLIGHT]{};
     VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT]{};
+
+    // Per swapchain image: presentation of an image may still be waiting on
+    // its semaphore when a later frame starts, so it cannot be shared per frame.
+    std::vector<VkSemaphore> renderFinishedSemaphores;
 
     GLFWwindow* windowHandle = nullptr;
 
     VkInstance instance = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+    bool validationEnabled = false;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkCommandPool commandPool = VK_NULL_HANDLE;
-    VkBuffer vertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
-    VkBuffer indexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
+
+    std::vector<VkImage> depthImages;
+    std::vector<VkDeviceMemory> depthImageMemories;
+    std::vector<VkImageView> depthImageViews;
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;

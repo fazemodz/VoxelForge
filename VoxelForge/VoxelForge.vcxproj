@@ -163,12 +163,18 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Engine\Core\Renderer\Geometry\Cube.cpp" />
     <ClCompile Include="Source\Engine\Core\Application.cpp" />
     <ClCompile Include="Source\Engine\Core\Input.cpp" />
     <ClCompile Include="Source\Engine\Core\Maths\Math.cpp" />
     <ClCompile Include="Source\Engine\Core\Time.cpp" />
     <ClCompile Include="Source\Engine\Core\Window.cpp" />
     <ClCompile Include="Source\Engine\Core\Renderer\VulkanContext.cpp" />
+    <ClCompile Include="Source\Engine\Core\Renderer\Camera.cpp" />
+    <ClCompile Include="Source\Engine\Core\FlyCameraController.cpp" />
+    <ClCompile Include="Source\Engine\Core\Renderer\VulkanBuffer.cpp" />
+    <ClCompile Include="Source\Engine\Core\Renderer\Mesh.cpp" />
+    <ClCompile Include="Source\Engine\Core\Renderer\Shader.cpp" />
     <ClCompile Include="Source\main.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
@@ -177,12 +183,19 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Engine\Core\Renderer\Geometry\Cube.h" />
     <ClInclude Include="Source\Engine\Core\Application.h" />
     <ClInclude Include="Source\Engine\Core\Input.h" />
     <ClInclude Include="Source\Engine\Core\Maths\Math.h" />
     <ClInclude Include="Source\Engine\Core\Time.h" />
     <ClInclude Include="Source\Engine\Core\Window.h" />
     <ClInclude Include="Source\Engine\Core\Renderer\VulkanContext.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\Camera.h" />
+    <ClInclude Include="Source\Engine\Core\FlyCameraController.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\Vertex.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\VulkanBuffer.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\Mesh.h" />
+    <ClInclude Include="Source\Engine\Core\Renderer\Shader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
